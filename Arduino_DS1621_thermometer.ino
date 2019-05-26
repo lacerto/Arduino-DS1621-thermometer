@@ -14,43 +14,71 @@ void setup() {
   
   Serial.begin(9600);
   Wire.begin();
+
+  initThermometer(ADDRESS);
+}
+
+byte msb = 0;
+byte lsb = 0;
+
+void loop() {
+  startConversion(ADDRESS);
   
-  Wire.beginTransmission(ADDRESS);
+  digitalWrite(LED_BUILTIN, HIGH);
+  while (!isConversionDone(ADDRESS)) {
+    delay(100);
+  }
+  digitalWrite(LED_BUILTIN, LOW);  
+
+  readTemperature(ADDRESS, &msb, &lsb);
+  float temperature = float(msb);
+  if (bitRead(lsb, 7)) temperature += 0.5;
+
+  Serial.print(F("Raw data: "));
+  Serial.print(msb, HEX);
+  Serial.print(" ");
+  Serial.println(lsb, HEX);
+  
+  Serial.print(F("Temperature: "));
+  Serial.println(temperature, 1);
+  
+  delay(1000);
+}
+
+void initThermometer(int address) {
+  Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
   Wire.endTransmission();
   Wire.requestFrom(ADDRESS, 1);
   byte config = Wire.read();
   config |= ONE_SHOT;
 
-  Wire.beginTransmission(ADDRESS);
+  Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
   Wire.write(config);
-  Wire.endTransmission();
+  Wire.endTransmission();  
 }
 
-void loop() {
-  Wire.beginTransmission(ADDRESS);
+void startConversion(int address) {
+  Wire.beginTransmission(address);
   Wire.write(START_CONVERT);
+  Wire.endTransmission();  
+}
+
+bool isConversionDone(int address) {
+  Wire.beginTransmission(address);
+  Wire.write(ACCESS_CONFIG);
   Wire.endTransmission();
-  digitalWrite(LED_BUILTIN, HIGH);
+  Wire.requestFrom(address, 1);
+  byte config = Wire.read();
+  return bitRead(config, 7); 
+}
 
-  while (true) {
-    Wire.beginTransmission(ADDRESS);
-    Wire.write(ACCESS_CONFIG);
-    Wire.endTransmission();
-    Wire.requestFrom(ADDRESS, 1);
-    byte config = Wire.read();
-    if (config & DONE == DONE) break;
-    delay(100);
-  }
-  digitalWrite(LED_BUILTIN, LOW);  
-
-  Wire.beginTransmission(ADDRESS);
+void readTemperature(int address, byte* msb, byte* lsb) {
+  Wire.beginTransmission(address);
   Wire.write(READ_TEMP);
   Wire.endTransmission();
-  Wire.requestFrom(ADDRESS, 2);
-  byte msb = Wire.read();
-  byte lsb = Wire.read();
-  Serial.println(msb);
-  delay(500);
+  Wire.requestFrom(address, 2);
+  *msb = Wire.read();
+  *lsb = Wire.read();
 }
