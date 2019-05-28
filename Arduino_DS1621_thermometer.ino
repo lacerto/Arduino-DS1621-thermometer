@@ -1,39 +1,81 @@
+/*
+	Arduino DS1621 Thermometer
+
+  Read the temperature from a DS1621 digital thermometer and
+  send the results as human readable text through the serial interface,
+  so it can be checked in the serial monitor.
+  The built-in LED is lit while the Arduino is waiting for the conversion
+  in the DS1621 to finish.
+
+	The circuit:
+	* 2x 4.7K resistors
+  * 1x DS1621
+
+  The DS1621 SDA(1) and SCL(2) pins are connected via to the 5V coming from
+  the Arduino's 5V pin via the two 4.7K pull-up resistors. The SDA and SCL pins
+  are also connected directly to the SDA and SCL pins of the Arduino (pins marked
+  as A4[SDA] and A5[SCL]; they can also be found duplicated and labeled as 
+  SDA and SCL [beside the AREF pin] on the REV 3 layout boards).
+  The chip select pins of the DS1621 A2(5), A1(6), A0(7) are on the ground.
+
+*/
+
 #include <Wire.h>
 
-#define ACCESS_CONFIG 0xAC
-#define START_CONVERT 0xEE
-#define READ_TEMP     0xAA
-#define ONE_SHOT      0x01
-#define DONE          0x80
+// Commands of the DS1621. See the COMMAND SET section in its documentation.
+#define ACCESS_CONFIG 0xAC  // reads or writes the configuration register
+#define START_CONVERT 0xEE  // starts the temperature conversion
+#define READ_TEMP     0xAA  // reads the result of the last conversion (2 bytes)
 
+// Bits in the DS1621 configuration register.
+#define ONE_SHOT      1
+#define DONE          7
+
+// The address of the connected DS1621 on the two-wire serial bus.
+// The DS1621 uses a 7-bit address and the upper 4 bits are fixed as 1001.
+// The remaining 3 bits can be configured using the 3 chip select pins of
+// the device. As these are on the ground (==0) in the configuration explained above,
+// so we get the address 1001000 = 0x48.
 const int ADDRESS = 0x48;
 
 void setup() {
+  // Set built-in LED pin to output and low.
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
   
+  // Initialize the serial and 2-wire serial bus communication.
   Serial.begin(9600);
   Wire.begin();
 
+  // Initialize the DS1621.
   initThermometer(ADDRESS);
 }
 
-byte msb = 0;
+byte msb = 0; // MSB & LSB of the temperature reading
 byte lsb = 0;
 
 void loop() {
+  // Start the temperature conversion.
   startConversion(ADDRESS);
   
+  // Turn on the built-in LED while waiting for the conversion to finish.
   digitalWrite(LED_BUILTIN, HIGH);
   while (!isConversionDone(ADDRESS)) {
     delay(100);
   }
   digitalWrite(LED_BUILTIN, LOW);  
 
+  // Get the 2-byte temperature reading and convert the MSB to
+  // floating point. Only bit 7 of the LSB has any meaning, if
+  // set it indicates that we have to add 0.5 degrees to the 
+  // value in MSB. Negative values are stored as 2's complement,
+  // we neglect negative values here.
   readTemperature(ADDRESS, &msb, &lsb);
   float temperature = float(msb);
   if (bitRead(lsb, 7)) temperature += 0.5;
 
+  // Print the raw data read from the thermometer and the
+  // floating point temperature value.
   Serial.print(F("Raw data: "));
   Serial.print(msb, HEX);
   Serial.print(" ");
@@ -46,13 +88,18 @@ void loop() {
 }
 
 void initThermometer(int address) {
+  // Send the access config command.
   Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
   Wire.endTransmission();
+  // Read the answer (1 byte).
   Wire.requestFrom(ADDRESS, 1);
   byte config = Wire.read();
-  config |= ONE_SHOT;
 
+  // Set the one shot mode in the config byte.
+  bitSet(config, ONE_SHOT);
+
+  // Write the config to the device.
   Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
   Wire.write(config);
@@ -60,21 +107,26 @@ void initThermometer(int address) {
 }
 
 void startConversion(int address) {
+  // Send the start convert command.
   Wire.beginTransmission(address);
   Wire.write(START_CONVERT);
   Wire.endTransmission();  
 }
 
 bool isConversionDone(int address) {
+  // Get the config byte.
   Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
   Wire.endTransmission();
   Wire.requestFrom(address, 1);
   byte config = Wire.read();
-  return bitRead(config, 7); 
+  // The DONE bit in the config byte signalizes that
+  // the conversion finished.
+  return bitRead(config, DONE); 
 }
 
 void readTemperature(int address, byte* msb, byte* lsb) {
+  // Issue the read temp command and read the 2-byte answer.
   Wire.beginTransmission(address);
   Wire.write(READ_TEMP);
   Wire.endTransmission();
