@@ -7,8 +7,8 @@
   The built-in LED is lit while the Arduino is waiting for the conversion
   in the DS1621 to finish.
 
-	The circuit:
-	* 2x 4.7K resistors
+  The circuit:
+  * 2x 4.7K resistors
   * 1x DS1621
 
   The DS1621 SDA(1) and SCL(2) pins are connected via to the 5V coming from
@@ -26,6 +26,8 @@
 #define ACCESS_CONFIG 0xAC  // reads or writes the configuration register
 #define START_CONVERT 0xEE  // starts the temperature conversion
 #define READ_TEMP     0xAA  // reads the result of the last conversion (2 bytes)
+#define READ_COUNTER  0xA8  // reads the COUNT_REMAIN value
+#define READ_SLOPE    0xA9  // reads the COUNT_PER_C value
 
 // Bits in the DS1621 configuration register.
 #define ONE_SHOT      1
@@ -84,6 +86,10 @@ void loop() {
   Serial.print(F("Temperature: "));
   Serial.println(temperature, 1);
   
+  temperature = getHighResolutionTemp(ADDRESS, msb);
+  Serial.print(F("Higher resolution value: "));
+  Serial.println(temperature, 3);
+
   delay(1000);
 }
 
@@ -133,4 +139,22 @@ void readTemperature(int address, byte* msb, byte* lsb) {
   Wire.requestFrom(address, 2);
   *msb = Wire.read();
   *lsb = Wire.read();
+}
+
+float getHighResolutionTemp(int address, byte msb) {
+  // Get the slope and the counter values and calculate
+  // the high resolution value as described in the datasheet.
+  Wire.beginTransmission(address);
+  Wire.write(READ_COUNTER);
+  Wire.endTransmission();
+  Wire.requestFrom(address, 1);
+  float countRemain = Wire.read();
+
+  Wire.beginTransmission(address);
+  Wire.write(READ_SLOPE);
+  Wire.endTransmission();
+  Wire.requestFrom(address, 1);
+  float countPerC = Wire.read();
+
+  return (float(msb) - 0.25) + ((countPerC - countRemain) / countPerC);
 }
