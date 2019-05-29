@@ -22,6 +22,7 @@ In this setup all device select pins are on the ground, which gives us the follo
 #### setup()
 * Initialize the built-in LED, the DS1621 to work in one-shot mode and the serial communication.
 #### loop()
-* Give the command to the DS1621 to start the temperature conversion. While waiting for the conversion to finish the built-in LED is on.
+* Check if there was an error during transmission. If yes then let the built-in LED blink rapidly and print the error code to serial. Do nothing else.
+* No error, so give the command to the DS1621 to start the temperature conversion. While waiting for the conversion to finish the built-in LED is on.
 * Read and print the temperature based on the 2-byte value read from the DS1621.
 * Calculate and print the high resolution temperature value as described in the datasheet.
