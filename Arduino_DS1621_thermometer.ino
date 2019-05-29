@@ -40,6 +40,9 @@
 // so we get the address 1001000 = 0x48.
 const int ADDRESS = 0x48;
 
+// This is set to the error code returned by endTransmission.
+byte transmissionError = 0;
+
 void setup() {
   // Set built-in LED pin to output and low.
   pinMode(LED_BUILTIN, OUTPUT);
@@ -57,15 +60,32 @@ byte msb = 0; // MSB & LSB of the temperature reading
 byte lsb = 0;
 
 void loop() {
+  if (transmissionError == 0) {
+    readAndDisplayTemperature(LED_BUILTIN);
+  } else {
+    Serial.print(F("Transmission error: "));
+    Serial.println(transmissionError);
+    blinkLED(LED_BUILTIN, 50);
+  }
+}
+
+void blinkLED(byte ledPin, unsigned long delayMillis) {
+  digitalWrite(ledPin, HIGH);
+  delay(delayMillis);
+  digitalWrite(ledPin, LOW);
+  delay(delayMillis);
+}
+
+void readAndDisplayTemperature(byte ledPin) {
   // Start the temperature conversion.
   startConversion(ADDRESS);
   
   // Turn on the built-in LED while waiting for the conversion to finish.
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(ledPin, HIGH);
   while (!isConversionDone(ADDRESS)) {
     delay(100);
   }
-  digitalWrite(LED_BUILTIN, LOW);  
+  digitalWrite(ledPin, LOW);  
 
   // Get the 2-byte temperature reading and convert the MSB to
   // floating point. Only bit 7 of the LSB has any meaning, if
@@ -97,7 +117,8 @@ void initThermometer(int address) {
   // Send the access config command.
   Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
-  Wire.endTransmission();
+  transmissionError = Wire.endTransmission();
+  if (transmissionError != 0) return;
   // Read the answer (1 byte).
   Wire.requestFrom(ADDRESS, 1);
   byte config = Wire.read();
@@ -109,21 +130,23 @@ void initThermometer(int address) {
   Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
   Wire.write(config);
-  Wire.endTransmission();  
+  transmissionError = Wire.endTransmission();  
+  if (transmissionError != 0) return;
 }
 
 void startConversion(int address) {
   // Send the start convert command.
   Wire.beginTransmission(address);
   Wire.write(START_CONVERT);
-  Wire.endTransmission();  
+  transmissionError = Wire.endTransmission();
 }
 
 bool isConversionDone(int address) {
   // Get the config byte.
   Wire.beginTransmission(address);
   Wire.write(ACCESS_CONFIG);
-  Wire.endTransmission();
+  transmissionError = Wire.endTransmission();  
+  if (transmissionError != 0) return true;
   Wire.requestFrom(address, 1);
   byte config = Wire.read();
   // The DONE bit in the config byte signalizes that
@@ -135,7 +158,8 @@ void readTemperature(int address, byte* msb, byte* lsb) {
   // Issue the read temp command and read the 2-byte answer.
   Wire.beginTransmission(address);
   Wire.write(READ_TEMP);
-  Wire.endTransmission();
+  transmissionError = Wire.endTransmission();  
+  if (transmissionError != 0) return;
   Wire.requestFrom(address, 2);
   *msb = Wire.read();
   *lsb = Wire.read();
@@ -146,13 +170,15 @@ float getHighResolutionTemp(int address, byte msb) {
   // the high resolution value as described in the datasheet.
   Wire.beginTransmission(address);
   Wire.write(READ_COUNTER);
-  Wire.endTransmission();
+  transmissionError = Wire.endTransmission();  
+  if (transmissionError != 0) return 0.0;
   Wire.requestFrom(address, 1);
   float countRemain = Wire.read();
 
   Wire.beginTransmission(address);
   Wire.write(READ_SLOPE);
-  Wire.endTransmission();
+  transmissionError = Wire.endTransmission();  
+  if (transmissionError != 0) return 0.0;
   Wire.requestFrom(address, 1);
   float countPerC = Wire.read();
 
