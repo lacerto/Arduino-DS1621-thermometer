@@ -6,6 +6,8 @@
   so it can be checked in the serial monitor.
   The built-in LED is lit while the Arduino is waiting for the conversion
   in the DS1621 to finish.
+  The built-in LED blinks rapidly if the device is not found on the bus or
+  any other transmission error occurs. The error code is written to serial.
 
   The circuit:
   * 2x 4.7K resistors
