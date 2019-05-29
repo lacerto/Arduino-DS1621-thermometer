@@ -30,7 +30,7 @@
 #define READ_SLOPE    0xA9  // reads the COUNT_PER_C value
 
 // Bits in the DS1621 configuration register.
-#define ONE_SHOT      1
+#define ONE_SHOT      0
 #define DONE          7
 
 // The address of the connected DS1621 on the two-wire serial bus.
